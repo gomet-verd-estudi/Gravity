@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS//VECTOR — Laser & LED Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#05080e;--panel:#0a0f1a;--bdr:#132840;--cyan:#00e5ff;--cdim:#0a3d4a;--mag:#ff2cf1;--grn:#39ff14;--amb:#ffc107;--red:#ff1744;--blu:#4488ff;--txt:#8ab4d8;--dim:#2a4060}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:'Share Tech Mono',monospace;min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:3px}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+.crt{position:fixed;inset:0;pointer-events:none;z-index:9999;background:repeating-linear-gradient(0deg,rgba(0,0,0,.1) 0px,rgba(0,0,0,.1) 1px,transparent 1px,transparent 3px)}
+.hdr{padding:8px 16px;border-bottom:1px solid var(--bdr);background:linear-gradient(180deg,var(--panel),var(--bg));display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.logo{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:900;color:var(--cyan);text-shadow:0 0 14px var(--cyan),0 0 28px var(--cyan);letter-spacing:.18em}
+.glow{font-family:'Share Tech Mono',monospace;letter-spacing:.07em;text-transform:uppercase}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.main{display:flex;gap:8px;padding:8px;min-height:calc(100vh - 46px)}
+.side{width:215px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;overflow-y:auto;max-height:calc(100vh - 54px)}
+.center{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}
+.pnl{background:var(--panel);border:1px solid var(--bdr);position:relative}
+.pnl::before,.pnl::after,.pnl .cbl,.pnl .cbr{content:'';position:absolute;width:6px;height:6px}
+.pnl::before{top:0;left:0;border-top:2px solid var(--cyan);border-left:2px solid var(--cyan)}
+.pnl::after{top:0;right:0;border-top:2px solid var(--cyan);border-right:2px solid var(--cyan)}
+.pnl .cbl{bottom:0;left:0;border-bottom:2px solid var(--cyan);border-left:2px solid var(--cyan)}
+.pnl .cbr{bottom:0;right:0;border-bottom:2px solid var(--cyan);border-right:2px solid var(--cyan)}
+.pnl-t{padding:4px 10px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:6px}
+.pnl-b{padding:6px 8px}
+.ind{width:5px;height:5px;display:inline-block}
+.sld{margin-bottom:7px}
+.sld-h{display:flex;justify-content:space-between;margin-bottom:2px}
+.sld-tr{position:relative;height:5px;background:#060c16;border:1px solid var(--bdr)}
+.sld-fl{position:absolute;top:0;left:0;height:100%}
+.sld-tr input{position:absolute;top:-5px;left:0;width:100%;height:16px;opacity:0;cursor:pointer;margin:0}
+.btn{background:transparent;font-family:'Share Tech Mono',monospace;font-size:9px;padding:4px 8px;cursor:pointer;text-transform:uppercase;letter-spacing:.08em;transition:all .15s;white-space:nowrap}
+.btn:hover{filter:brightness(1.3)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.active{box-shadow:0 0 8px currentColor;background:rgba(255,255,255,.05)}
+.upload-zone{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border:2px dashed var(--bdr);cursor:pointer;transition:all .2s;text-align:center}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--cyan);background:rgba(0,229,255,.06)}
+.upload-zone input{display:none}
+#display{flex:1;display:flex;align-items:center;justify-content:center;background:#000;position:relative;min-height:200px}
+#outCanvas{max-width:100%;max-height:100%;border:1px solid var(--bdr);box-shadow:0 0 30px rgba(0,229,255,.1)}
+.actions{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.colors,.modes,.formats{display:flex;gap:3px;flex-wrap:wrap}
+.diag-r{display:flex;justify-content:space-between;margin-bottom:3px}
+.tog-row{display:flex;gap:3px;margin-bottom:6px}
+.txt-in{width:100%;background:#060c16;border:1px solid var(--bdr);color:var(--cyan);font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 6px;letter-spacing:.05em;outline:none;margin-bottom:2px}
+@media(max-width:900px){.main{flex-direction:column}.side{width:100%;max-height:none;flex-direction:row;flex-wrap:wrap}.side .pnl{flex:1;min-width:180px}}
+</style>
+</head>
+<body>
+<div class="crt"></div>
+<video id="srcVideo" style="display:none" loop muted playsinline></video>
+<video id="pipVideo" style="display:none" loop muted playsinline></video>
+<canvas id="srcCanvas" style="display:none"></canvas>
+<canvas id="pipSrcCanvas" style="display:none"></canvas>
+<canvas id="logoTmpCanvas" style="display:none"></canvas>
+
+<div class="hdr">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="display:flex;gap:3px"><span class="dot" style="background:var(--red);box-shadow:0 0 4px var(--red)"></span><span class="dot" style="background:var(--amb);box-shadow:0 0 4px var(--amb)"></span><span class="dot" style="background:var(--grn);box-shadow:0 0 4px var(--grn)"></span></div>
+    <span class="logo">NEXUS//VECTOR</span>
+    <span id="resLabel" class="glow" style="font-size:8px;color:var(--dim)">1920×1080</span>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center">
+    <div id="recInd" style="display:none;align-items:center;gap:5px"><span class="dot" style="background:var(--red);box-shadow:0 0 8px var(--red);animation:blink 1s infinite"></span><span class="glow" style="font-size:9px;color:var(--red)">REC <span id="recT">0</span>s</span></div>
+    <div style="display:flex;align-items:center;gap:5px"><span id="stDot" class="dot" style="background:var(--amb);box-shadow:0 0 5px var(--amb)"></span><span id="stTxt" class="glow" style="font-size:8px;color:var(--dim)">STANDBY</span></div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="side" id="leftSide">
+    <!-- Media Input -->
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--amb);box-shadow:0 0 6px var(--amb)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--amb)">MEDIA INPUT</span></div>
+      <div class="pnl-b">
+        <label class="upload-zone" id="uploadZone">
+          <div id="upIcon" style="font-size:20px;color:var(--cyan)">⬆</div>
+          <span id="upText" class="glow" style="font-size:8px;color:var(--dim)">CLICK OR DROP FILE</span>
+          <span class="glow" style="font-size:7px;color:var(--dim)">MP4 · WEBM · MOV · PNG · JPG · GIF</span>
+          <input type="file" id="fileIn" accept="video/*,image/*">
+        </label>
+        <div id="loadInfo" style="margin-top:4px;display:none"><span class="glow" style="font-size:8px;color:var(--grn)">● <span id="loadType">—</span> LOADED</span></div>
+      </div>
+    </div>
+
+    <!-- PIP Input (top-right laser overlay) -->
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--cyan)">PIP OVERLAY (LASER)</span></div>
+      <div class="pnl-b">
+        <label class="upload-zone" id="pipZone" style="padding:8px 4px">
+          <div id="pipIcon" style="font-size:16px;color:var(--cyan)">⬆</div>
+          <span id="pipText" class="glow" style="font-size:7px;color:var(--dim)">ADD PIP IMAGE/VIDEO</span>
+          <input type="file" id="pipFileIn" accept="video/*,image/*">
+        </label>
+        <div id="pipInfo" style="margin-top:4px;display:none"><span class="glow" style="font-size:7px;color:var(--cyan)">● PIP ACTIVE</span></div>
+        <div id="sldPip" style="margin-top:4px"></div>
+      </div>
+    </div>
+
+    <!-- Canvas Format -->
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--blu);box-shadow:0 0 6px var(--blu)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--blu)">CANVAS FORMAT</span></div>
+      <div class="pnl-b">
+        <span class="glow" style="font-size:7px;color:var(--dim);display:block;margin-bottom:4px">ASPECT RATIO</span>
+        <div class="formats" id="fmtBtns"></div>
+        <span class="glow" style="font-size:7px;color:var(--dim);display:block;margin:6px 0 4px">CONTENT FIT</span>
+        <div class="formats" id="fitBtns"></div>
+      </div>
+    </div>
+
+    <!-- Render Mode -->
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--mag);box-shadow:0 0 6px var(--mag)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--mag)">RENDER MODE</span></div>
+      <div class="pnl-b">
+        <div class="modes" id="modeBtns"></div>
+      </div>
+    </div>
+
+    <!-- LASER controls (visible when laser mode) -->
+    <div id="laserPanel">
+      <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+        <div class="pnl-t"><span class="ind" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--cyan)">EDGE DETECTION</span></div>
+        <div class="pnl-b" id="sldEdge"></div>
+      </div>
+      <div class="pnl" style="margin-top:6px"><span class="cbl"></span><span class="cbr"></span>
+        <div class="pnl-t"><span class="ind" id="clrInd" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></span><span class="glow" id="clrTitle" style="font-size:9px;font-weight:700;color:var(--cyan)">LASER COLOR</span></div>
+        <div class="pnl-b"><div class="colors" id="clrBtns"></div></div>
+      </div>
+    </div>
+
+    <!-- LED controls (visible when led mode) -->
+    <div id="ledPanel" style="display:none">
+      <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+        <div class="pnl-t"><span class="ind" style="background:var(--grn);box-shadow:0 0 6px var(--grn)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--grn)">LED HALFTONE</span></div>
+        <div class="pnl-b" id="sldLed"></div>
+      </div>
+      <div class="pnl" style="margin-top:6px"><span class="cbl"></span><span class="cbr"></span>
+        <div class="pnl-t"><span class="ind" id="ledClrInd" style="background:var(--grn);box-shadow:0 0 6px var(--grn)"></span><span class="glow" id="ledClrTitle" style="font-size:9px;font-weight:700;color:var(--grn)">LED COLOR</span></div>
+        <div class="pnl-b"><div class="colors" id="ledClrBtns"></div></div>
+      </div>
+    </div>
+
+    <!-- CRT DitherTone controls (visible when crt mode) -->
+    <div id="crtPanel" style="display:none">
+      <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+        <div class="pnl-t"><span class="ind" style="background:var(--amb);box-shadow:0 0 6px var(--amb)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--amb)">CRT MODULATION</span></div>
+        <div class="pnl-b" id="sldCrt2"></div>
+      </div>
+      <div class="pnl" style="margin-top:6px"><span class="cbl"></span><span class="cbr"></span>
+        <div class="pnl-t"><span class="ind" id="crtClrInd" style="background:var(--amb);box-shadow:0 0 6px var(--amb)"></span><span class="glow" id="crtClrTitle" style="font-size:9px;font-weight:700;color:var(--amb)">CRT COLOR</span></div>
+        <div class="pnl-b"><div class="colors" id="crtClrBtns"></div></div>
+      </div>
+    </div>
+
+    <!-- Presets -->
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--mag);box-shadow:0 0 6px var(--mag)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--mag)">PRESETS</span></div>
+      <div class="pnl-b"><div class="presets" id="presets"></div></div>
+    </div>
+
+    <!-- Accent Color -->
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" id="accentInd" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></span><span class="glow" id="accentTitle" style="font-size:9px;font-weight:700;color:var(--cyan)">ACCENT COLOR</span></div>
+      <div class="pnl-b"><div class="colors" id="accentBtns"></div></div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="center">
+    <div class="pnl" style="flex:1;display:flex;flex-direction:column"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></span><span class="glow" id="outTitle" style="font-size:9px;font-weight:700;color:var(--cyan)">OUTPUT — 1920×1080</span></div>
+      <div class="pnl-b" style="flex:1;display:flex;flex-direction:column">
+        <div id="display"><canvas id="outCanvas" width="1920" height="1080"></canvas></div>
+      </div>
+    </div>
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--amb);box-shadow:0 0 6px var(--amb)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--amb)">ACTIONS</span></div>
+      <div class="pnl-b"><div class="actions" id="actBar"></div></div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="side">
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--cyan)">HEADER BAR</span></div>
+      <div class="pnl-b">
+        <span class="glow" style="font-size:7px;color:var(--dim);display:block;margin-bottom:2px">LEFT (DATE/TIME)</span>
+        <input type="text" id="headerLeft" value="" class="txt-in" placeholder="(auto: date & time)">
+        <span class="glow" style="font-size:7px;color:var(--dim);display:block;margin:4px 0 2px">RIGHT (LOCATION)</span>
+        <input type="text" id="headerRight" value="C/ DE LA PAZ, 46003" class="txt-in" placeholder="STREET / LOCATION">
+        <div id="sldHeader"></div>
+      </div>
+    </div>
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--mag);box-shadow:0 0 6px var(--mag)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--mag)">CANVAS ORDER</span></div>
+      <div class="pnl-b">
+        <span class="glow" style="font-size:7px;color:var(--dim);display:block;margin-bottom:4px">DRAG TO REORDER (top→bottom)</span>
+        <div id="layerOrder" style="display:flex;flex-direction:column;gap:3px"></div>
+      </div>
+    </div>
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--grn);box-shadow:0 0 6px var(--grn)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--grn)">CRT EFFECTS</span></div>
+      <div class="pnl-b" id="sldCrt"></div>
+    </div>
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--cyan)">HUD OVERLAY</span></div>
+      <div class="pnl-b" id="sldHud"></div>
+    </div>
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--cyan)">HUD TEXTS</span></div>
+      <div class="pnl-b">
+        <span class="glow" style="font-size:7px;color:var(--dim);display:block;margin-bottom:2px">TOP LEFT</span>
+        <input type="text" id="hudTL" value="NEXUS//SCAN" class="txt-in">
+        <span class="glow" style="font-size:7px;color:var(--dim);display:block;margin:4px 0 2px">TOP RIGHT</span>
+        <input type="text" id="hudTR" value="" class="txt-in" placeholder="(auto: resolution)">
+        <span class="glow" style="font-size:7px;color:var(--dim);display:block;margin:4px 0 2px">BOTTOM LEFT</span>
+        <input type="text" id="hudBL" value="" class="txt-in" placeholder="(auto: time)">
+        <span class="glow" style="font-size:7px;color:var(--dim);display:block;margin:4px 0 2px">BOTTOM RIGHT</span>
+        <input type="text" id="hudBR" value="VECTOR:ACTIVE" class="txt-in">
+        <span class="glow" style="font-size:7px;color:var(--dim);display:block;margin:4px 0 2px">PIP LABEL</span>
+        <input type="text" id="pipLabel" value="PIP//LASER" class="txt-in">
+      </div>
+    </div>
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--amb);box-shadow:0 0 6px var(--amb)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--amb)">TICKER TEXT</span></div>
+      <div class="pnl-b">
+        <input type="text" id="tickerInput" value="NEXUS//VECTOR" maxlength="100" class="txt-in" placeholder="TICKER TEXT...">
+        <div id="sldTicker"></div>
+        <div id="sldTickerSize"></div>
+      </div>
+    </div>
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--amb);box-shadow:0 0 6px var(--amb)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--amb)">LOGO STYLE</span></div>
+      <div class="pnl-b">
+        <div class="modes" id="logoModeBtns"></div>
+        <div id="sldLogo" style="margin-top:6px"></div>
+        <span class="glow" style="font-size:7px;color:var(--dim);display:block;margin:6px 0 3px">LOGO COLOR</span>
+        <div class="colors" id="logoClrBtns"></div>
+      </div>
+    </div>
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--cyan)">PIP LASER CTRL</span></div>
+      <div class="pnl-b" id="sldPipLaser"></div>
+    </div>
+    <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
+      <div class="pnl-t"><span class="ind" style="background:var(--dim)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--dim)">DIAGNOSTICS</span></div>
+      <div class="pnl-b" id="diag"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// FORMATS & STATE
+// ═══════════════════════════════════════
+const FORMATS = {
+  '16:9':  [1920, 1080],
+  '9:16':  [1080, 1920],
+  '1:1':   [1080, 1080],
+  '4:5':   [1080, 1350],
+  '4:3':   [1440, 1080],
+};
+const FIT_MODES = ['FIT WIDTH', 'FIT HEIGHT'];
+const RENDER_MODES = ['LASER', 'LED', 'CRT'];
+
+let CW = 1920, CH = 1080;
+let fitMode = 0;
+let renderMode = 0; // 0=laser, 1=led, 2=crt
+
+let mediaType = null, loaded = false, playing = false;
+let isRec = false, recStart = 0, recTmr = null;
+let mediaImg = null, recorder = null, recChunks = [];
+let tickerX = 0;
+let pipType = null, pipLoaded = false, pipImg = null;
+let canvasOrder = ['header','media','ticker','logo'];
+
+// Global accent color (index into CRGB/CCSS)
+let accentIdx = 0; // 0=cyan, 1=green, 2=magenta, 3=amber, 4=white
+const ACCENT_HEX = ['#00e5ff','#39ff14','#ff2cf1','#ffc107','#ffffff'];
+function getAccentHex(){ return ACCENT_HEX[accentIdx]; }
+function setAccent(idx){
+  accentIdx = idx;
+  // Update CSS custom property for all UI elements
+  document.documentElement.style.setProperty('--cyan', ACCENT_HEX[idx]);
+  // Update all panel corners, indicators, borders
+  document.querySelectorAll('.pnl::before,.pnl::after,.pnl .cbl,.pnl .cbr').forEach(el=>{});
+}
+
+// Logo image (embedded SVG)
+const logoImg = new Image();
+logoImg.src = 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4NCjwhLS0gR2VuZXJhdG9yOiBBZG9iZSBJbGx1c3RyYXRvciAyNi41LjAsIFNWRyBFeHBvcnQgUGx1Zy1JbiAuIFNWRyBWZXJzaW9uOiA2LjAwIEJ1aWxkIDApICAtLT4NCjxzdmcgdmVyc2lvbj0iMS4xIiBpZD0iQ2FwYV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCINCgkgdmlld0JveD0iMCAwIDEyODUuNjYgMjE4LjA4IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCAxMjg1LjY2IDIxOC4wODsiIHhtbDpzcGFjZT0icHJlc2VydmUiPg0KPHN0eWxlIHR5cGU9InRleHQvY3NzIj4NCgkuc3Qwe2ZpbGw6I0ZFNUMzNjt9DQoJLnN0MXtmaWxsOiNGRTVDMzY7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQ0KCS5zdDJ7ZmlsbDojMDBBRjY0O30NCgkuc3Qze2ZpbGw6IzAwQUY2NDtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MztzdHJva2UtbWl0ZXJsaW1pdDoxMDt9DQoJLnN0NHtmaWxsOiNGRkZGRkY7fQ0KCS5zdDV7ZmlsbDojOTk3OURDO30NCgkuc3Q2e2ZpbGw6Izk5NzlEQztzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MztzdHJva2UtbWl0ZXJsaW1pdDoxMDt9DQoJLnN0N3tmaWxsOiM5OTc5REM7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjQ7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQ0KCS5zdDh7ZmlsbDojRkU1QzM2O3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDo0O3N0cm9rZS1taXRlcmxpbWl0OjEwO30NCgkuc3Q5e2ZpbGw6IzAwQUY2NDtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6NDtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9DQo8L3N0eWxlPg0KPGc+DQoJPGc+DQoJCTxwYXRoIGNsYXNzPSJzdDQiIGQ9Ik0xMTAzLjA1LDI1LjkzYy0yLjIzLDE0Ljg1LTExLjc2LDI1Ljg3LTMxLjY4LDI1LjgyaC00NS40bC0yMS4wMywxNDAuMTgNCgkJCWMtMi44OSwxOS40My0xNS4wNiwyNS41OC0yOS42OSwyNS41OWMtMTAuODUsMC0yNC42OC02LjE2LTIxLjY0LTI1LjU5bDIxLjAzLTE0MC4xOEg4NDYuM2MtMTMuNjMsMC0yNS4zNSw2LjktMzQuODIsMTYuMDgNCgkJCWMtMzMuNDMsMzIuNC0xMjYuNTcsMTI0LjEtMTI2LjU3LDEyNC4xYy0xNC42NSwxNC40My0yNi4wMSwyNS41OS00OC43MiwyNS41OWgtMjUuOGMtMTAuODUsMC0yMy44NC0xMS41Mi0yMS42NC0yNS41OQ0KCQkJbDI0Ljk2LTE2Ni4zNEM2MTYuNjEsNi4xNiw2MjguNzcsMC4wMSw2NDMuNCwwYzEwLjg2LDAsMjQuNjksNi4xNiwyMS42NCwyNS41OWwtMTkuOCwxMzEuOTNMNzc0LjgsMzAuMzINCgkJCWMxNC42MS0xNC41NSw0MC4zOS0zMC4xOSw2Ni4xNC0zMC4xOWMxNS4yMywwLDIzOC4yMi0wLjEzLDIzOC4yMi0wLjEzQzEwOTkuMDQsMCwxMTA1LjI3LDExLjIyLDExMDMuMDUsMjUuOTN6Ii8+DQoJPC9nPg0KCTxnPg0KCQk8cGF0aCBjbGFzcz0ic3Q0IiBkPSJNOTQuMzUsMTA4LjgyYzIuMjEtMTQuNzEsMTEuMjQtMjUuODYsMzEuMzgtMjUuODZoODAuNDZjMTkuODMsMCwyNi4wNiwxMC41NywyMy40MiwyOC41MQ0KCQkJYy0yLjI4LDE1LjUxLTQuODUsMzAuODMtNC44NSwzMC44M2MtNy4yLDQ4LjgyLTM5LjE5LDc1LjEtNjYuNzksNzUuMWMtMjYuMzYsMC4xNS05My4xNSwwLjEyLTkzLjE1LDAuMTINCgkJCWMtNDguNDQsMC03MC43OS0yNi40MS02My40NS03NS4yN2wxMC4xNS02Ny4yOEMxOC44MywyNi4wMSw0OC45MiwwLjEzLDk3LjUsMC4yMWwxMjEuMDctMC4xM2MxOS44NywwLDI2LjEsMTEuMjIsMjMuODksMjUuOTMNCgkJCWMtMi4yMywxNC44NS0xMS43NywyNS44OC0zMS42OCwyNS44Mkw4OS43Miw1MS45Yy0xMS43LDAtMjUuMDMsMTEuNTMtMjYuNzYsMjMuMDZjMCwwLTYuODcsNDQuOTItMTAuMTMsNjcuMzkNCgkJCWMtMS42NCwxMS4yNSw4LjU3LDIzLjM2LDE5LjYsMjMuMzZsNzMuOTQtMC4wMmMxNi4zMywwLDI0LjUtNi4xLDI3LjExLTIzLjM5YzAuMS0xLjkxLDEuMTctNy42MiwxLjE3LTcuNjINCgkJCWMtOS4xNSwwLTQ3LjM5LDAtNTYuNzMsMEM5Ny43NCwxMzQuNjgsOTIuMTQsMTIzLjUyLDk0LjM1LDEwOC44MiIvPg0KCTwvZz4NCgk8Zz4NCgkJPGNpcmNsZSBjbGFzcz0ic3Q0IiBjeD0iMTI0MS4xNyIgY3k9IjE5My43MiIgcj0iMjQuMzYiLz4NCgk8L2c+DQoJPGc+DQoJCTxwYXRoIGNsYXNzPSJzdDQiIGQ9Ik05MjIuMjksMTkxLjUyYy0yLjI1LDE0Ljk1LTExLjg0LDI2LjA0LTMxLjg4LDI1Ljk5aC0yOS4zNmwtNTEuNDMsMC4wMWgtMzUuNjYNCgkJCWMtMTkuOTksMC0yNi4yNi0xMS4yOC0yNC4wNC0yNi4wOWMyLjI1LTE0Ljk0LDExLjg0LTI2LjAzLDMxLjg4LTI1Ljk4aDM1LjQ0YzAtMC4wMSwwLTAuMDEsMC0wLjAxaDAuMjJsOC42Ny01Ny41Nw0KCQkJYzIuODktMTkuNDIsMTUuMDYtMjUuNTgsMjkuNjktMjUuNTljMTAuODUsMCwyNC42OCw2LjE3LDIxLjY0LDI1LjU5bC04LjYxLDU3LjU3aDI5LjYyDQoJCQlDOTE4LjI5LDE2NS41Miw5MjQuNTEsMTc2Ljc4LDkyMi4yOSwxOTEuNTJ6Ii8+DQoJPC9nPg0KCTxnPg0KCQk8cGF0aCBjbGFzcz0ic3Q0IiBkPSJNMTI3OC42Myw3LjIxYy05LjM1LTkuMTgtMjguMDUtOS4xNy0zNy4yLTAuMTljLTIuNzksMi43NC03NS4yMSw3My43OS03NS4yMSw3My43OWw4LjE4LTU1LjENCgkJCWMzLjA0LTE5LjQzLTEwLjc5LTI1LjYtMjEuNjQtMjUuNTljLTE0LjYzLDAtMjYuOCw2LjE2LTI5LjY5LDI1LjU5bC0xNi4wOSwxMDYuODljLTAuODUsNC4zMS0yLjIzLDguNzQtNS4xNywxMS40bC0zMC43MSwzMC4xOA0KCQkJYy05LjE1LDguOTgtOS4xNSwyNy4zNCwwLjIsMzYuNTFjOS4zNSw5LjE4LDI4LjA1LDkuMTcsMzcuMiwwLjE5bDE3MC4zMy0xNjcuMTdDMTI4Ny45OCwzNC43NCwxMjg3Ljk4LDE2LjM4LDEyNzguNjMsNy4yMXoiLz4NCgk8L2c+DQoJPGc+DQoJCTxwYXRoIGNsYXNzPSJzdDQiIGQ9Ik01MTEuNTcsMC4yMUwzNDkuOTksMC4yNWMtNDguNTctMC4wOC03OC42NiwyNS44LTg1Ljk4LDc0Ljc1TDI0Ni41LDE5Mi4wNQ0KCQkJYy0zLjA0LDE5LjQzLDEwLjc5LDI1LjYsMjEuNjQsMjUuNTljMTQuNjMsMCwyNi44LTYuMTYsMjkuNjktMjUuNTlMMzE1LjQ1LDc1YzEuNzQtMTEuNTMsMTUuMDYtMjMuMDYsMjYuNzctMjMuMDZsMTYxLjc0LDAuMDgNCgkJCWMxMS4wMiwwLDIxLjIzLDEyLjExLDE5LjYsMjMuMzZjLTAuMzQsMi4zMS0wLjcxLDQuODQtMS4xMSw3LjU1SDQyOS44Yy00My45OSwwLTc4LjE1LDI1LjktODQuMzcsNjcuMjUNCgkJCWMtNi4yOCw0MS43NSwyMC4xOCw2Ny4zNCw2NC4xMyw2Ny4zNGw2OS43NC0wLjEzYzQ4LjU3LDAuMDgsNzguNjYtMjUuOCw4NS45OC03NC43NWMwLDAsNS41My0zOC4zMyw4LjU4LTU5LjU5aDAuMDJsMS4xNC03LjU3DQoJCQlDNTgyLjM2LDI2LjYxLDU2MC4wMSwwLjIxLDUxMS41NywwLjIxeiBNNTEzLjg0LDE0Mi42NGMtMS43NCwxMS41My0xNS4wNiwyMy4wNi0yNi43NywyMy4wNmMwLDAtNjgtMC4wMS02OS43MS0wLjAxDQoJCQljLTkuMTMsMC0xNy4yNC02LjA3LTE1LjgyLTE1LjUxYzEuNDItOS40MywxMS4zOC0xNS41LDIwLjQ4LTE1LjVsOTMuMDEtMC4wMUw1MTMuODQsMTQyLjY0eiIvPg0KCTwvZz4NCjwvZz4NCjwvc3ZnPg0K';
+
+const P = { sens:60, thick:2, glow:60, color:0, orig:0, scan:40, grid:20, gridWidth:1, vig:60, hud:70, noise:15, ledSize:6, ledSpace:3, ledBright:50, ledGlow:50, ledColor:0, tickerSpeed:8, tickerSize:100, crtDotMax:8, crtSpace:2, crtGlow:60, crtColor:0, pipSize:30, pipSens:60, pipThick:2, pipGlow:50, logoMode:0, logoColor:0, logoLineW:2, headerSize:60 };
+
+const PRESETS = {
+  TRON:       { sens:60, thick:2, glow:70, color:0, orig:0,  scan:30, grid:40, vig:60, hud:70,  noise:10, ledSize:6, ledSpace:3, ledBright:50, ledGlow:50, ledColor:0, tickerSpeed:8, crtDotMax:8, crtSpace:2, crtGlow:60, crtColor:0 },
+  "BLADE R.": { sens:45, thick:1, glow:50, color:3, orig:30, scan:60, grid:10, vig:80, hud:50,  noise:35, ledSize:5, ledSpace:3, ledBright:50, ledGlow:40, ledColor:3, tickerSpeed:6, crtDotMax:6, crtSpace:1, crtGlow:50, crtColor:3 },
+  ALIENS:     { sens:70, thick:2, glow:60, color:1, orig:0,  scan:40, grid:30, vig:50, hud:90,  noise:15, ledSize:7, ledSpace:2, ledBright:60, ledGlow:60, ledColor:1, tickerSpeed:10, crtDotMax:10, crtSpace:3, crtGlow:70, crtColor:1 },
+  AKIRA:      { sens:55, thick:3, glow:80, color:4, orig:10, scan:20, grid:15, vig:70, hud:60,  noise:20, ledSize:8, ledSpace:4, ledBright:70, ledGlow:70, ledColor:2, tickerSpeed:12, crtDotMax:12, crtSpace:4, crtGlow:80, crtColor:2 },
+  "WAR G.":   { sens:75, thick:1, glow:40, color:1, orig:0,  scan:70, grid:50, vig:40, hud:100, noise:25, ledSize:4, ledSpace:2, ledBright:45, ledGlow:35, ledColor:1, tickerSpeed:7, crtDotMax:5, crtSpace:1, crtGlow:40, crtColor:1 },
+  OUTRUN:     { sens:50, thick:3, glow:90, color:2, orig:15, scan:25, grid:60, vig:65, hud:40,  noise:5,  ledSize:8, ledSpace:4, ledBright:65, ledGlow:80, ledColor:2, tickerSpeed:14, crtDotMax:10, crtSpace:3, crtGlow:90, crtColor:2 },
+};
+
+const CNAMES = ["CYAN","GREEN","MAGENTA","AMBER","MULTI"];
+const CCSS = ["var(--cyan)","var(--grn)","var(--mag)","var(--amb)","var(--blu)"];
+const CRGB = [[0,.9,1],[.22,1,.08],[1,.17,.95],[1,.76,.03]];
+
+// ═══════════════════════════════════════
+// DOM
+// ═══════════════════════════════════════
+const srcVid = document.getElementById('srcVideo');
+const srcC = document.getElementById('srcCanvas');
+const outC = document.getElementById('outCanvas');
+let srcCtx, outCtx;
+const glowC = document.createElement('canvas');
+let glowCtx;
+
+function resizeCanvases() {
+  srcC.width = CW; srcC.height = CH;
+  outC.width = CW; outC.height = CH;
+  glowC.width = CW; glowC.height = CH;
+  srcCtx = srcC.getContext('2d', { willReadFrequently: true });
+  outCtx = outC.getContext('2d', { willReadFrequently: true });
+  glowCtx = glowC.getContext('2d');
+  document.getElementById('resLabel').textContent = CW + '×' + CH;
+  document.getElementById('outTitle').textContent = 'OUTPUT — ' + CW + '×' + CH;
+  // Redraw placeholder if not loaded
+  if (!loaded) { drawPlaceholder(); }
+}
+resizeCanvases();
+
+function drawPlaceholder() {
+  outCtx.fillStyle = '#000'; outCtx.fillRect(0,0,CW,CH);
+  outCtx.fillStyle = '#0a3d4a'; outCtx.font = '20px "Share Tech Mono",monospace';
+  outCtx.textAlign = 'center';
+  outCtx.fillText('UPLOAD MEDIA TO BEGIN', CW/2, CH/2);
+  outCtx.font = '14px "Share Tech Mono",monospace';
+  outCtx.fillText(CW + ' × ' + CH + ' HD', CW/2, CH/2 + 28);
+  outCtx.textAlign = 'start';
+}
+drawPlaceholder();
+
+// ═══════════════════════════════════════
+// SOBEL
+// ═══════════════════════════════════════
+function sobel(data, w, h) {
+  const g = new Float32Array(w*h);
+  for (let i=0;i<w*h;i++){const j=i*4;g[i]=.299*data[j]+.587*data[j+1]+.114*data[j+2];}
+  const e = new Float32Array(w*h); let mx=0;
+  for (let y=1;y<h-1;y++) for (let x=1;x<w-1;x++){
+    const i=y*w+x;
+    const gx=-g[(y-1)*w+x-1]-2*g[y*w+x-1]-g[(y+1)*w+x-1]+g[(y-1)*w+x+1]+2*g[y*w+x+1]+g[(y+1)*w+x+1];
+    const gy=-g[(y-1)*w+x-1]-2*g[(y-1)*w+x]-g[(y-1)*w+x+1]+g[(y+1)*w+x-1]+2*g[(y+1)*w+x]+g[(y+1)*w+x+1];
+    const m=Math.sqrt(gx*gx+gy*gy);e[i]=m;if(m>mx)mx=m;
+  }
+  if(mx>0)for(let i=0;i<e.length;i++)e[i]/=mx;
+  return e;
+}
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function render() {
+  const W = CW, H = CH;
+  const LOGO_PAD = 20;
+  const accentHex = getAccentHex();
+
+  // Zone heights
+  const headerL = document.getElementById('headerLeft').value;
+  const headerR = document.getElementById('headerRight').value;
+  const hasHeader = headerL.length > 0 || headerR.length > 0;
+  const HEADER_H = hasHeader ? Math.round(P.headerSize * 1.4 + 20) : 0;
+  const TICKER_H = Math.round(P.tickerSize * 1.3 + 10);
+
+  let LOGO_H = 0;
+  if (logoImg && logoImg.complete && logoImg.naturalWidth > 0) {
+    const logoAspect = logoImg.naturalWidth / logoImg.naturalHeight;
+    const logoDrawW = W - LOGO_PAD * 2;
+    LOGO_H = Math.round(logoDrawW / logoAspect + LOGO_PAD * 2);
+  }
+
+  const MEDIA_H = H - HEADER_H - TICKER_H - LOGO_H;
+  if (MEDIA_H < 50) return;
+
+  // Y positions for each zone (fixed order: header → media → ticker → logo)
+  const zY = {};
+  let cY = 0;
+  canvasOrder.forEach(z => {
+    zY[z] = cY;
+    if (z==='header') cY += HEADER_H;
+    else if (z==='media') cY += MEDIA_H;
+    else if (z==='ticker') cY += TICKER_H;
+    else if (z==='logo') cY += LOGO_H;
+  });
+
+  let media = null;
+  if (mediaType==='video'){if(srcVid.readyState>=2)media=srcVid;} else media=mediaImg;
+  if (!media) return;
+
+  const mw=media.videoWidth||media.naturalWidth||W, mh=media.videoHeight||media.naturalHeight||H;
+  if (mw<=0||mh<=0) return;
+
+  // Content fit — media has same padding as logo
+  const MW = W - LOGO_PAD * 2; // media width (same as logo)
+  let sx,sy,sw,sh;
+  if (fitMode===0){sw=mw;sh=mw/(MW/MEDIA_H);sx=0;sy=(mh-sh)/2;}
+  else{sh=mh;sw=mh*(MW/MEDIA_H);sx=(mw-sw)/2;sy=0;}
+
+  srcC.width=MW; srcC.height=MEDIA_H;
+  srcCtx=srcC.getContext('2d',{willReadFrequently:true});
+  srcCtx.drawImage(media,sx,sy,sw,sh,0,0,MW,MEDIA_H);
+  const sd=srcCtx.getImageData(0,0,MW,MEDIA_H).data;
+
+  // Clear
+  outCtx.fillStyle='#000'; outCtx.fillRect(0,0,W,H);
+
+  // ════ HEADER BAR (two texts, space-between) ════
+  if (HEADER_H > 0 && hasHeader) {
+    const hY = zY['header'];
+    const hPad = LOGO_PAD;
+    const leftText = headerL || new Date().toLocaleString('es-ES', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const rightText = headerR;
+
+    outCtx.save();
+    outCtx.font = P.headerSize + 'px "ABCGravity","Orbitron",sans-serif';
+    outCtx.fillStyle = accentHex;
+    outCtx.textBaseline = 'middle';
+    const yMid = hY + HEADER_H / 2;
+
+    // Left text
+    if (leftText) {
+      outCtx.textAlign = 'left';
+      outCtx.fillText(leftText, hPad, yMid);
+    }
+    // Right text
+    if (rightText) {
+      outCtx.textAlign = 'right';
+      outCtx.fillText(rightText, W - hPad, yMid);
+    }
+    outCtx.restore();
+
+    // Separator line
+    outCtx.strokeStyle = accentHex + '44'; outCtx.lineWidth = 1;
+    outCtx.beginPath(); outCtx.moveTo(0, hY + HEADER_H); outCtx.lineTo(W, hY + HEADER_H); outCtx.stroke();
+  }
+
+  // ════ MEDIA (render to temp, then place) ════
+  const MY=zY['media'];
+  glowC.width=MW; glowC.height=MEDIA_H;
+  glowCtx=glowC.getContext('2d',{willReadFrequently:true});
+  glowCtx.fillStyle='#000'; glowCtx.fillRect(0,0,MW,MEDIA_H);
+  const mc=glowCtx;
+
+  if (renderMode===0) {
+    // ── LASER ──
+    const edges=sobel(sd,MW,MEDIA_H);
+    const th=(100-P.sens)/100*0.45;
+    const bin=new Uint8Array(MW*MEDIA_H);
+    for(let i=0;i<MW*MEDIA_H;i++)bin[i]=edges[i]>th?1:0;
+    let fin=bin;
+    if(P.thick>1){
+      const r=Math.floor(P.thick/2);
+      const tmp=new Uint8Array(MW*MEDIA_H);
+      for(let y=0;y<MEDIA_H;y++)for(let x=0;x<MW;x++){let f=0;for(let d=-r;d<=r&&!f;d++){const nx=x+d;if(nx>=0&&nx<MW&&bin[y*MW+nx])f=1;}tmp[y*MW+x]=f;}
+      const dil=new Uint8Array(MW*MEDIA_H);
+      for(let x=0;x<MW;x++)for(let y=0;y<MEDIA_H;y++){let f=0;for(let d=-r;d<=r&&!f;d++){const ny=y+d;if(ny>=0&&ny<MEDIA_H&&tmp[ny*MW+x])f=1;}dil[y*MW+x]=f;}
+      fin=dil;
+    }
+    if(P.orig>0){mc.globalAlpha=P.orig/400;mc.drawImage(srcC,0,0);mc.globalAlpha=1;}
+    const cm=P.color;
+    const img=mc.createImageData(MW,MEDIA_H);const o=img.data;
+    for(let y=0;y<MEDIA_H;y++)for(let x=0;x<MW;x++){
+      const i=y*MW+x;if(!fin[i])continue;
+      let r,g,b;
+      if(cm===4){const hu=(x/MW+y/MEDIA_H)*Math.PI*2;r=Math.sin(hu)*.5+.5;g=Math.sin(hu+2.094)*.5+.5;b=Math.sin(hu+4.189)*.5+.5;const m2=Math.max(r,g,b);if(m2>0){r/=m2;g/=m2;b/=m2;}}
+      else{[r,g,b]=CRGB[cm];}
+      const px=i*4;o[px]=Math.round(r*255);o[px+1]=Math.round(g*255);o[px+2]=Math.round(b*255);o[px+3]=255;
+    }
+    mc.putImageData(img,0,0);
+
+  } else if (renderMode===1) {
+    // ── LED ──
+    const sz=P.ledSize,sp=P.ledSpace,step=sz+sp;
+    const lc=P.ledColor;let lr,lg,lb;
+    if(lc<4){[lr,lg,lb]=CRGB[lc];}else{lr=1;lg=1;lb=1;}
+    mc.fillStyle=`rgb(${Math.round(lr*255)},${Math.round(lg*255)},${Math.round(lb*255)})`;
+    let rowIdx=0;
+    for(let gy=0;gy<MEDIA_H;gy+=step){
+      const off=(rowIdx%2)*Math.round(step/2);
+      for(let gx=off;gx<MW;gx+=step){
+        const sX=Math.min(MW-1,gx+Math.floor(sz/2)),sY=Math.min(MEDIA_H-1,gy+Math.floor(sz/2));
+        const pi=(sY*MW+sX)*4;
+        const lum=(0.299*sd[pi]+0.587*sd[pi+1]+0.114*sd[pi+2])/255;
+        const dotSz=Math.round(sz*lum*(P.ledBright/50));
+        if(dotSz>=1){mc.fillRect(gx+Math.floor((sz-dotSz)/2),gy+Math.floor((sz-dotSz)/2),dotSz,dotSz);}
+      }
+      rowIdx++;
+    }
+
+  } else if (renderMode===2) {
+    // ── CRT ──
+    const maxR=P.crtDotMax,sp=P.crtSpace,step=maxR*2+sp;
+    const cc=P.crtColor;let cr,cg,cb;
+    if(cc<4){[cr,cg,cb]=CRGB[cc];}else{cr=1;cg=1;cb=1;}
+    for(let gy=maxR;gy<MEDIA_H;gy+=step){
+      for(let gx=maxR;gx<MW;gx+=step){
+        const pi=(gy*MW+gx)*4;
+        const lum=(0.299*sd[pi]+0.587*sd[pi+1]+0.114*sd[pi+2])/255;
+        if(lum<0.02)continue;
+        const dotR=Math.max(1,Math.round(maxR*lum));
+        const grad=mc.createRadialGradient(gx-dotR*0.3,gy-dotR*0.3,dotR*0.1,gx,gy,dotR);
+        grad.addColorStop(0,`rgba(${Math.round(cr*255)},${Math.round(cg*255)},${Math.round(cb*255)},1)`);
+        grad.addColorStop(0.5,`rgba(${Math.round(cr*200)},${Math.round(cg*200)},${Math.round(cb*200)},0.9)`);
+        grad.addColorStop(1,`rgba(${Math.round(cr*80)},${Math.round(cg*80)},${Math.round(cb*80)},0.3)`);
+        mc.beginPath();mc.arc(gx,gy,dotR,0,Math.PI*2);mc.fillStyle=grad;mc.fill();
+      }
+    }
+  }
+
+  // Post-processing on media temp canvas
+  if(P.scan>0){mc.fillStyle=`rgba(0,0,0,${P.scan/200})`;const gap=Math.max(2,4-Math.floor(P.scan/40));for(let y=0;y<MEDIA_H;y+=gap)mc.fillRect(0,y,MW,1);}
+  if(P.grid>0){mc.strokeStyle=accentHex+(Math.round(P.grid/400*255)).toString(16).padStart(2,'0');mc.lineWidth=P.gridWidth;const st=Math.max(20,100-P.grid);for(let x=0;x<MW;x+=st){mc.beginPath();mc.moveTo(x,0);mc.lineTo(x,MEDIA_H);mc.stroke();}for(let y=0;y<MEDIA_H;y+=st){mc.beginPath();mc.moveTo(0,y);mc.lineTo(MW,y);mc.stroke();}}
+  if(P.vig>0){const v=P.vig/100;const gr=mc.createRadialGradient(MW/2,MEDIA_H/2,Math.min(MW,MEDIA_H)*.25,MW/2,MEDIA_H/2,Math.max(MW,MEDIA_H)*.7);gr.addColorStop(0,'transparent');gr.addColorStop(1,`rgba(0,0,10,${v})`);mc.fillStyle=gr;mc.fillRect(0,0,MW,MEDIA_H);}
+  if(P.hud>0){
+    const ha=P.hud/100;mc.save();mc.globalAlpha=ha;mc.strokeStyle=accentHex;mc.fillStyle=accentHex;mc.lineWidth=2;mc.font='14px "Share Tech Mono",monospace';
+    const m=16,bL=35;
+    [[m,m,m+bL,m,m,m+bL],[MW-m,m,MW-m-bL,m,MW-m,m+bL],[m,MEDIA_H-m,m+bL,MEDIA_H-m,m,MEDIA_H-m-bL],[MW-m,MEDIA_H-m,MW-m-bL,MEDIA_H-m,MW-m,MEDIA_H-m-bL]].forEach(([x1,y1,x2,y2,x3,y3])=>{mc.beginPath();mc.moveTo(x3,y3);mc.lineTo(x1,y1);mc.lineTo(x2,y2);mc.stroke();});
+    const htl=document.getElementById('hudTL').value||'';
+    const htr=document.getElementById('hudTR').value||(MW+'\u00d7'+H);
+    const hbl=document.getElementById('hudBL').value||(new Date().toISOString().slice(11,19));
+    const hbr=document.getElementById('hudBR').value||'';
+    if(htl)mc.fillText(htl,m+5,m+24);
+    if(htr){const tw=mc.measureText(htr).width;mc.fillText(htr,MW-m-tw-5,m+24);}
+    if(hbl)mc.fillText(hbl,m+5,MEDIA_H-m-8);
+    if(hbr){const tw=mc.measureText(hbr).width;mc.fillText(hbr,MW-m-tw-5,MEDIA_H-m-8);}
+    const cx=MW/2,cy=MEDIA_H/2;
+    [[cx-16,cy,cx-5,cy],[cx+5,cy,cx+16,cy],[cx,cy-16,cx,cy-5],[cx,cy+5,cx,cy+16]].forEach(([a,b,c,d])=>{mc.beginPath();mc.moveTo(a,b);mc.lineTo(c,d);mc.stroke();});
+    mc.globalAlpha=ha*.4;for(let i=0;i<6;i++){const yy=m+38+i*18,bw=6+Math.random()*35;mc.fillRect(m+2,yy,bw,2);mc.fillRect(MW-m-2-bw,yy,bw,2);}
+    mc.restore();
+  }
+
+  // PIP on media temp canvas
+  if(pipLoaded){
+    const pipVid=document.getElementById('pipVideo');
+    let pipMedia=null;
+    if(pipType==='video'){if(pipVid.readyState>=2)pipMedia=pipVid;}else pipMedia=pipImg;
+    if(pipMedia){
+      const pipFrac=P.pipSize/100;
+      const pipW=Math.round(MW*pipFrac),pipH=Math.round(MEDIA_H*pipFrac);
+      const pipX=MW-pipW-20,pipY=20;
+      const pipSC=document.getElementById('pipSrcCanvas');
+      pipSC.width=pipW;pipSC.height=pipH;
+      const pipSCtx=pipSC.getContext('2d',{willReadFrequently:true});
+      const pmw=pipMedia.videoWidth||pipMedia.naturalWidth||pipW,pmh=pipMedia.videoHeight||pipMedia.naturalHeight||pipH;
+      const pA=pipW/pipH,pmA=pmw/pmh;let psx,psy,psw,psh;
+      if(pmA>pA){psh=pmh;psw=pmh*pA;psx=(pmw-psw)/2;psy=0;}else{psw=pmw;psh=pmw/pA;psx=0;psy=(pmh-psh)/2;}
+      pipSCtx.drawImage(pipMedia,psx,psy,psw,psh,0,0,pipW,pipH);
+      const pipSD=pipSCtx.getImageData(0,0,pipW,pipH).data;
+      const pipEdges=sobel(pipSD,pipW,pipH);
+      const pipTh=(100-P.pipSens)/100*0.45;
+      const pipBin=new Uint8Array(pipW*pipH);
+      for(let i=0;i<pipW*pipH;i++)pipBin[i]=pipEdges[i]>pipTh?1:0;
+      let pipFin=pipBin;
+      if(P.pipThick>1){
+        const r=Math.floor(P.pipThick/2);
+        const t2=new Uint8Array(pipW*pipH);
+        for(let y=0;y<pipH;y++)for(let x=0;x<pipW;x++){let f=0;for(let d=-r;d<=r&&!f;d++){const nx=x+d;if(nx>=0&&nx<pipW&&pipBin[y*pipW+nx])f=1;}t2[y*pipW+x]=f;}
+        const d2=new Uint8Array(pipW*pipH);
+        for(let x=0;x<pipW;x++)for(let y=0;y<pipH;y++){let f=0;for(let d=-r;d<=r&&!f;d++){const ny=y+d;if(ny>=0&&ny<pipH&&t2[ny*pipW+x])f=1;}d2[y*pipW+x]=f;}
+        pipFin=d2;
+      }
+      mc.fillStyle='rgba(0,0,0,0.85)';mc.fillRect(pipX-2,pipY-2,pipW+4,pipH+4);
+      mc.strokeStyle=accentHex+'66';mc.lineWidth=1;mc.strokeRect(pipX-2,pipY-2,pipW+4,pipH+4);
+      const cm=P.color;const pipImg2=mc.createImageData(pipW,pipH);const po=pipImg2.data;
+      for(let y=0;y<pipH;y++)for(let x=0;x<pipW;x++){
+        const i=y*pipW+x;if(!pipFin[i])continue;let r,g,b;
+        if(cm===4){const hu=(x/pipW+y/pipH)*Math.PI*2;r=Math.sin(hu)*.5+.5;g=Math.sin(hu+2.094)*.5+.5;b=Math.sin(hu+4.189)*.5+.5;const m2=Math.max(r,g,b);if(m2>0){r/=m2;g/=m2;b/=m2;}}
+        else{[r,g,b]=CRGB[cm];}
+        const px=i*4;po[px]=Math.round(r*255);po[px+1]=Math.round(g*255);po[px+2]=Math.round(b*255);po[px+3]=255;
+      }
+      mc.putImageData(pipImg2,pipX,pipY);
+      const pipLbl=document.getElementById('pipLabel').value;
+      if(pipLbl){mc.save();mc.globalAlpha=0.6;mc.fillStyle=accentHex;mc.font='10px "Share Tech Mono",monospace';mc.fillText(pipLbl,pipX+4,pipY+pipH+14);mc.restore();}
+    }
+  }
+
+  // Blit media temp canvas to output at correct Y
+  outCtx.drawImage(glowC, LOGO_PAD, MY);
+
+  // Separator after media
+  outCtx.strokeStyle=accentHex+'44';outCtx.lineWidth=1;
+  outCtx.beginPath();outCtx.moveTo(0,MY+MEDIA_H);outCtx.lineTo(W,MY+MEDIA_H);outCtx.stroke();
+
+  // ════ TICKER ════
+  const TY=zY['ticker'];
+  const tickerText=document.getElementById('tickerInput').value;
+  if(tickerText.length>0){
+    outCtx.save();
+    outCtx.beginPath();outCtx.rect(0,TY,W,TICKER_H);outCtx.clip();
+    outCtx.font=P.tickerSize+'px "EPSON",monospace';
+    outCtx.fillStyle=accentHex;outCtx.textBaseline='middle';
+    const textW=outCtx.measureText(tickerText).width;
+    const yCenter=TY+TICKER_H/2;
+    const gap=W*0.3;
+    tickerX-=P.tickerSpeed;
+    const totalW=textW+gap;
+    if(tickerX<-totalW)tickerX+=totalW;
+    for(let tx=tickerX;tx<W+textW;tx+=totalW){outCtx.fillText(tickerText,tx,yCenter);}
+    outCtx.restore();
+  }
+  // Separator after ticker
+  outCtx.strokeStyle=accentHex+'44';outCtx.lineWidth=1;
+  outCtx.beginPath();outCtx.moveTo(0,TY+TICKER_H);outCtx.lineTo(W,TY+TICKER_H);outCtx.stroke();
+
+  // ════ LOGO ════
+  const LY=zY['logo'];
+  if(logoImg&&logoImg.complete&&LOGO_H>0){
+    const logoAspect=logoImg.naturalWidth/logoImg.naturalHeight;
+    const drawW=W-LOGO_PAD*2,drawH=drawW/logoAspect;
+    const logoX=LOGO_PAD,logoY=LY+LOGO_PAD;
+    const lcc=P.logoColor;let lcr,lcg,lcb;
+    if(lcc<4){[lcr,lcg,lcb]=CRGB[lcc];}else{lcr=1;lcg=1;lcb=1;}
+    const ltc=document.getElementById('logoTmpCanvas');
+    ltc.width=drawW+4;ltc.height=drawH+4; // +4 margin to prevent line clipping
+    const ltx=ltc.getContext('2d',{willReadFrequently:true});
+    ltx.clearRect(0,0,ltc.width,ltc.height);
+    ltx.drawImage(logoImg,2,2,drawW,drawH); // draw with 2px margin
+
+    if(P.logoMode===0){
+      ltx.globalCompositeOperation='source-in';
+      ltx.fillStyle=`rgb(${Math.round(lcr*255)},${Math.round(lcg*255)},${Math.round(lcb*255)})`;
+      ltx.fillRect(0,0,ltc.width,ltc.height);
+      outCtx.save();outCtx.globalAlpha=0.9;
+      outCtx.drawImage(ltc,logoX-2,logoY-2);
+      outCtx.restore();
+    } else {
+      const lSD=ltx.getImageData(0,0,ltc.width,ltc.height).data;
+      const lW2=ltc.width,lH2=ltc.height;
+      const lEdges=sobel(lSD,lW2,lH2);
+      const lBin=new Uint8Array(lW2*lH2);
+      for(let i=0;i<lW2*lH2;i++)lBin[i]=lEdges[i]>0.12?1:0;
+      let lFin=lBin;
+      const lw=P.logoLineW;
+      if(lw>1){
+        const r=Math.floor(lw/2);
+        const t2=new Uint8Array(lW2*lH2);
+        for(let y=0;y<lH2;y++)for(let x=0;x<lW2;x++){let f=0;for(let d=-r;d<=r&&!f;d++){const nx=x+d;if(nx>=0&&nx<lW2&&lBin[y*lW2+nx])f=1;}t2[y*lW2+x]=f;}
+        const d2=new Uint8Array(lW2*lH2);
+        for(let x=0;x<lW2;x++)for(let y=0;y<lH2;y++){let f=0;for(let d=-r;d<=r&&!f;d++){const ny=y+d;if(ny>=0&&ny<lH2&&t2[ny*lW2+x])f=1;}d2[y*lW2+x]=f;}
+        lFin=d2;
+      }
+      const lOut=ltx.createImageData(lW2,lH2);const lo=lOut.data;
+      const cr8=Math.round(lcr*255),cg8=Math.round(lcg*255),cb8=Math.round(lcb*255);
+      for(let i=0;i<lW2*lH2;i++){if(!lFin[i])continue;const px=i*4;lo[px]=cr8;lo[px+1]=cg8;lo[px+2]=cb8;lo[px+3]=255;}
+      outCtx.putImageData(lOut,logoX-2,logoY-2);
+    }
+  }
+
+  // Noise on full canvas
+  if(P.noise>0){const ni=outCtx.getImageData(0,0,W,H),nd=ni.data,nA=P.noise/100*30;for(let i=0;i<nd.length;i+=4){if(nd[i+3]>0||Math.random()<.02){const n=(Math.random()-.5)*nA;nd[i]=Math.max(0,Math.min(255,nd[i]+n));nd[i+1]=Math.max(0,Math.min(255,nd[i+1]+n));nd[i+2]=Math.max(0,Math.min(255,nd[i+2]+n));}}outCtx.putImageData(ni,0,0);}
+}
+
+// ═══════════════════════════════════════
+// LOOP
+// ═══════════════════════════════════════
+function loop(){if(loaded)try{render();}catch(e){console.error('Render error:',e);}requestAnimationFrame(loop);}
+
+// Load fonts from files (must be in same folder as this HTML)
+let epsonLoaded = false;
+const epsonFont = new FontFace("EPSON", "url('EPSON.woff2')");
+const gravityFont = new FontFace("ABCGravity", "url('ABCGravity.woff2')");
+Promise.allSettled([epsonFont.load(), gravityFont.load()]).then(results => {
+  results.forEach((r,i) => {
+    if (r.status === 'fulfilled') { document.fonts.add(r.value); console.log(['EPSON','ABCGravity'][i] + ' loaded'); }
+    else console.warn(['EPSON','ABCGravity'][i] + ' not found');
+  });
+  requestAnimationFrame(loop);
+});
+
+// ═══════════════════════════════════════
+// FILE HANDLING
+// ═══════════════════════════════════════
+const fileIn=document.getElementById('fileIn'), upZone=document.getElementById('uploadZone');
+const upText=document.getElementById('upText'), upIcon=document.getElementById('upIcon');
+const loadInfo=document.getElementById('loadInfo'), loadType=document.getElementById('loadType');
+const stDot=document.getElementById('stDot'), stTxt=document.getElementById('stTxt');
+
+function handleFile(file){
+  if(!file)return;
+  upText.textContent=file.name;upIcon.textContent='⟳';upIcon.style.animation='pulse 1s infinite';
+  loadInfo.style.display='none';loaded=false;
+  const url=URL.createObjectURL(file);
+  if(file.type.startsWith('video/')){mediaType='video';mediaImg=null;srcVid.src=url;srcVid.load();}
+  else if(file.type.startsWith('image/')){mediaType='image';const img=new Image();img.onload=()=>{mediaImg=img;onReady();};img.onerror=()=>{upText.textContent='ERROR';upIcon.style.animation='none';};img.src=url;}
+}
+srcVid.addEventListener('loadeddata',()=>{onReady();srcVid.play().then(()=>{playing=true;updatePlayBtn();}).catch(()=>{playing=false;updatePlayBtn();});});
+srcVid.addEventListener('error',()=>{upText.textContent='VIDEO ERROR';upIcon.style.animation='none';});
+function onReady(){
+  loaded=true;upIcon.textContent='⬆';upIcon.style.color='var(--cyan)';upIcon.style.animation='none';
+  loadInfo.style.display='block';loadType.textContent=mediaType.toUpperCase();
+  stDot.style.background='var(--grn)';stDot.style.boxShadow='0 0 5px var(--grn)';
+  stTxt.textContent=mediaType==='video'?'PLAYING':'LOCKED';
+  updatePlayBtn();
+}
+fileIn.addEventListener('change',e=>{handleFile(e.target.files[0]);e.target.value='';});
+upZone.addEventListener('dragover',e=>{e.preventDefault();upZone.classList.add('drag');});
+upZone.addEventListener('dragleave',()=>upZone.classList.remove('drag'));
+upZone.addEventListener('drop',e=>{e.preventDefault();upZone.classList.remove('drag');handleFile(e.dataTransfer.files[0]);});
+
+// PIP FILE HANDLING
+const pipFileIn=document.getElementById('pipFileIn');
+const pipVidEl=document.getElementById('pipVideo');
+const pipText=document.getElementById('pipText');
+const pipIcon=document.getElementById('pipIcon');
+const pipInfo=document.getElementById('pipInfo');
+const pipZone=document.getElementById('pipZone');
+
+function handlePipFile(file){
+  if(!file)return;
+  pipText.textContent=file.name;
+  pipLoaded=false;
+  const url=URL.createObjectURL(file);
+  if(file.type.startsWith('video/')){
+    pipType='video';pipImg=null;
+    pipVidEl.src=url;pipVidEl.load();
+  } else if(file.type.startsWith('image/')){
+    pipType='image';
+    const img=new Image();
+    img.onload=()=>{pipImg=img;pipLoaded=true;pipInfo.style.display='block';pipIcon.textContent='✓';};
+    img.onerror=()=>{pipText.textContent='ERROR';};
+    img.src=url;
+  }
+}
+pipVidEl.addEventListener('loadeddata',()=>{pipLoaded=true;pipInfo.style.display='block';pipIcon.textContent='✓';pipVidEl.play().catch(()=>{});});
+pipFileIn.addEventListener('change',e=>{handlePipFile(e.target.files[0]);e.target.value='';});
+pipZone.addEventListener('dragover',e=>{e.preventDefault();pipZone.classList.add('drag');});
+pipZone.addEventListener('dragleave',()=>pipZone.classList.remove('drag'));
+pipZone.addEventListener('drop',e=>{e.preventDefault();pipZone.classList.remove('drag');handlePipFile(e.dataTransfer.files[0]);});
+
+// CANVAS ORDER UI
+function renderOrderUI(){
+  const c=document.getElementById('layerOrder');c.innerHTML='';
+  canvasOrder.forEach((z,i)=>{
+    const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:4px';
+    const label=document.createElement('span');label.className='glow';label.style.cssText='font-size:9px;color:var(--cyan);flex:1;text-transform:uppercase';label.textContent=z;
+    const up=document.createElement('button');up.className='btn';up.style.cssText='font-size:8px;padding:2px 6px;color:var(--mag);border:1px solid var(--mag)';up.textContent='▲';
+    up.onclick=()=>{if(i>0){[canvasOrder[i-1],canvasOrder[i]]=[canvasOrder[i],canvasOrder[i-1]];renderOrderUI();}};
+    const dn=document.createElement('button');dn.className='btn';dn.style.cssText='font-size:8px;padding:2px 6px;color:var(--mag);border:1px solid var(--mag)';dn.textContent='▼';
+    dn.onclick=()=>{if(i<canvasOrder.length-1){[canvasOrder[i],canvasOrder[i+1]]=[canvasOrder[i+1],canvasOrder[i]];renderOrderUI();}};
+    row.appendChild(up);row.appendChild(dn);row.appendChild(label);c.appendChild(row);
+  });
+}
+renderOrderUI();
+
+// ═══════════════════════════════════════
+// FORMAT BUTTONS
+// ═══════════════════════════════════════
+const fmtC=document.getElementById('fmtBtns'), fmtBs=[];
+Object.keys(FORMATS).forEach((k,i)=>{
+  const b=document.createElement('button');b.className='btn';
+  b.style.cssText='color:var(--blu);border:1px solid var(--blu);text-shadow:0 0 6px var(--blu)55';
+  b.textContent=k;
+  b.onclick=()=>{const [w,h]=FORMATS[k];CW=w;CH=h;resizeCanvases();fmtBs.forEach((bb,j)=>bb.classList.toggle('active',j===i));};
+  fmtC.appendChild(b);fmtBs.push(b);
+});
+fmtBs[0].classList.add('active');
+
+const fitC=document.getElementById('fitBtns'), fitBs=[];
+FIT_MODES.forEach((k,i)=>{
+  const b=document.createElement('button');b.className='btn';
+  b.style.cssText='color:var(--blu);border:1px solid var(--blu);text-shadow:0 0 6px var(--blu)55';
+  b.textContent=k;
+  b.onclick=()=>{fitMode=i;fitBs.forEach((bb,j)=>bb.classList.toggle('active',j===i));};
+  fitC.appendChild(b);fitBs.push(b);
+});
+fitBs[0].classList.add('active');
+
+// ═══════════════════════════════════════
+// RENDER MODE BUTTONS
+// ═══════════════════════════════════════
+const modeC=document.getElementById('modeBtns'), modeBs=[];
+RENDER_MODES.forEach((k,i)=>{
+  const b=document.createElement('button');b.className='btn';
+  b.style.cssText='color:var(--mag);border:1px solid var(--mag);text-shadow:0 0 6px var(--mag)55';
+  b.textContent=k;
+  b.onclick=()=>{
+    renderMode=i;modeBs.forEach((bb,j)=>bb.classList.toggle('active',j===i));
+    document.getElementById('laserPanel').style.display=i===0?'block':'none';
+    document.getElementById('ledPanel').style.display=i===1?'block':'none';
+    document.getElementById('crtPanel').style.display=i===2?'block':'none';
+  };
+  modeC.appendChild(b);modeBs.push(b);
+});
+modeBs[0].classList.add('active');
+
+// ═══════════════════════════════════════
+// SLIDERS
+// ═══════════════════════════════════════
+const sldRefs=[];
+function mkSld(container,label,key,color,min=0,max=100){
+  const d=document.createElement('div');d.className='sld';
+  d.innerHTML=`<div class="sld-h"><span class="glow" style="font-size:8px;color:var(--dim)">${label}</span><span class="glow sv" style="font-size:8px;color:${color}">${P[key]}</span></div><div class="sld-tr"><div class="sld-fl" style="width:${((P[key]-min)/(max-min))*100}%;background:linear-gradient(90deg,${color}33,${color});box-shadow:0 0 8px ${color}55"></div><input type="range" min="${min}" max="${max}" value="${P[key]}"></div>`;
+  const inp=d.querySelector('input'),fl=d.querySelector('.sld-fl'),sv=d.querySelector('.sv');
+  inp.addEventListener('input',()=>{P[key]=+inp.value;fl.style.width=((P[key]-min)/(max-min))*100+'%';sv.textContent=P[key];});
+  d._upd=()=>{inp.value=P[key];fl.style.width=((P[key]-min)/(max-min))*100+'%';sv.textContent=P[key];};
+  container.appendChild(d);sldRefs.push(d);
+}
+function refreshSld(){sldRefs.forEach(s=>s._upd());}
+
+// LED sliders
+mkSld(document.getElementById('sldLed'),'PIXEL SIZE','ledSize','var(--grn)',2,16);
+mkSld(document.getElementById('sldLed'),'SPACING','ledSpace','var(--grn)',0,10);
+mkSld(document.getElementById('sldLed'),'BRIGHTNESS','ledBright','var(--grn)',10,100);
+mkSld(document.getElementById('sldLed'),'LED GLOW','ledGlow','var(--grn)');
+
+// CRT sliders
+mkSld(document.getElementById('sldCrt2'),'DOT MAX SIZE','crtDotMax','var(--amb)',3,16);
+mkSld(document.getElementById('sldCrt2'),'DOT SPACING','crtSpace','var(--amb)',0,8);
+mkSld(document.getElementById('sldCrt2'),'CRT GLOW','crtGlow','var(--amb)');
+
+// PIP slider
+mkSld(document.getElementById('sldPip'),'PIP SIZE %','pipSize','var(--cyan)',10,50);
+
+mkSld(document.getElementById('sldEdge'),'SENSITIVITY','sens','var(--cyan)');
+mkSld(document.getElementById('sldEdge'),'LINE THICKNESS','thick','var(--cyan)',1,5);
+mkSld(document.getElementById('sldEdge'),'GLOW BLOOM','glow','var(--cyan)');
+mkSld(document.getElementById('sldEdge'),'SHOW ORIGINAL','orig','var(--amb)');
+mkSld(document.getElementById('sldCrt'),'SCANLINES','scan','var(--grn)');
+mkSld(document.getElementById('sldCrt'),'GRID','grid','var(--grn)');
+mkSld(document.getElementById('sldCrt'),'GRID WIDTH','gridWidth','var(--grn)',1,6);
+mkSld(document.getElementById('sldCrt'),'VIGNETTE','vig','var(--grn)');
+mkSld(document.getElementById('sldCrt'),'NOISE','noise','var(--amb)');
+mkSld(document.getElementById('sldHud'),'HUD','hud','var(--cyan)');
+mkSld(document.getElementById('sldTicker'),'SPEED','tickerSpeed','var(--amb)',1,30);
+mkSld(document.getElementById('sldTickerSize'),'TEXT HEIGHT','tickerSize','var(--amb)',40,200);
+
+// Header sliders
+mkSld(document.getElementById('sldHeader'),'TEXT HEIGHT','headerSize','var(--amb)',30,150);
+
+// PIP laser sliders
+mkSld(document.getElementById('sldPipLaser'),'PIP SENSITIVITY','pipSens','var(--cyan)');
+mkSld(document.getElementById('sldPipLaser'),'PIP LINE THICK','pipThick','var(--cyan)',1,5);
+mkSld(document.getElementById('sldPipLaser'),'PIP GLOW','pipGlow','var(--cyan)');
+
+// ═══════════════════════════════════════
+// PRESETS
+// ═══════════════════════════════════════
+const pG=document.getElementById('presets');
+Object.entries(PRESETS).forEach(([n,v])=>{const b=document.createElement('button');b.className='btn';b.style.cssText='color:var(--mag);border:1px solid rgba(255,44,241,.4);text-shadow:0 0 6px rgba(255,44,241,.4)';b.textContent=n;b.onclick=()=>{Object.assign(P,v);refreshSld();updClr();updLedClr();updCrtClr();};pG.appendChild(b);});
+
+// ═══════════════════════════════════════
+// COLORS
+// ═══════════════════════════════════════
+const clrC=document.getElementById('clrBtns'),clrBs=[];
+CNAMES.forEach((n,i)=>{const b=document.createElement('button');b.className='btn';b.style.cssText=`color:${CCSS[i]};border:1px solid ${CCSS[i]};text-shadow:0 0 6px ${CCSS[i]}`;b.textContent=n;b.onclick=()=>{P.color=i;updClr();};clrC.appendChild(b);clrBs.push(b);});
+function updClr(){clrBs.forEach((b,i)=>b.classList.toggle('active',P.color===i));document.getElementById('clrInd').style.background=CCSS[P.color];document.getElementById('clrTitle').style.color=CCSS[P.color];}
+updClr();
+
+// LED COLORS (same palette + WHITE)
+const LED_CNAMES=["CYAN","GREEN","MAGENTA","AMBER","WHITE"];
+const LED_CCSS=["var(--cyan)","var(--grn)","var(--mag)","var(--amb)","#ffffff"];
+const ledClrC=document.getElementById('ledClrBtns'),ledClrBs=[];
+LED_CNAMES.forEach((n,i)=>{
+  const b=document.createElement('button');b.className='btn';
+  b.style.cssText=`color:${LED_CCSS[i]};border:1px solid ${LED_CCSS[i]};text-shadow:0 0 6px ${LED_CCSS[i]}55`;
+  b.textContent=n;b.onclick=()=>{P.ledColor=i;updLedClr();};
+  ledClrC.appendChild(b);ledClrBs.push(b);
+});
+function updLedClr(){
+  ledClrBs.forEach((b,i)=>b.classList.toggle('active',P.ledColor===i));
+  document.getElementById('ledClrInd').style.background=LED_CCSS[P.ledColor];
+  document.getElementById('ledClrTitle').style.color=LED_CCSS[P.ledColor];
+}
+updLedClr();
+
+updLedClr();
+
+// CRT COLORS
+const CRT_CNAMES=["CYAN","GREEN","MAGENTA","AMBER","WHITE"];
+const CRT_CCSS=["var(--cyan)","var(--grn)","var(--mag)","var(--amb)","#ffffff"];
+const crtClrC=document.getElementById('crtClrBtns'),crtClrBs=[];
+CRT_CNAMES.forEach((n,i)=>{
+  const b=document.createElement('button');b.className='btn';
+  b.style.cssText=`color:${CRT_CCSS[i]};border:1px solid ${CRT_CCSS[i]};text-shadow:0 0 6px ${CRT_CCSS[i]}55`;
+  b.textContent=n;b.onclick=()=>{P.crtColor=i;updCrtClr();};
+  crtClrC.appendChild(b);crtClrBs.push(b);
+});
+function updCrtClr(){
+  crtClrBs.forEach((b,i)=>b.classList.toggle('active',P.crtColor===i));
+  document.getElementById('crtClrInd').style.background=CRT_CCSS[P.crtColor];
+  document.getElementById('crtClrTitle').style.color=CRT_CCSS[P.crtColor];
+}
+updCrtClr();
+
+// ACCENT COLOR BUTTONS (global UI color)
+const ACC_NAMES=["CYAN","GREEN","MAGENTA","AMBER","WHITE"];
+const ACC_CSS=["#00e5ff","#39ff14","#ff2cf1","#ffc107","#ffffff"];
+const accC=document.getElementById('accentBtns'),accBs=[];
+ACC_NAMES.forEach((n,i)=>{
+  const b=document.createElement('button');b.className='btn';
+  b.style.cssText=`color:${ACC_CSS[i]};border:1px solid ${ACC_CSS[i]};text-shadow:0 0 6px ${ACC_CSS[i]}55`;
+  b.textContent=n;b.onclick=()=>{setAccent(i);updAccent();};
+  accC.appendChild(b);accBs.push(b);
+});
+function updAccent(){
+  accBs.forEach((b,i)=>b.classList.toggle('active',accentIdx===i));
+  document.getElementById('accentInd').style.background=ACC_CSS[accentIdx];
+  document.getElementById('accentInd').style.boxShadow=`0 0 6px ${ACC_CSS[accentIdx]}`;
+  document.getElementById('accentTitle').style.color=ACC_CSS[accentIdx];
+}
+updAccent();
+
+// ═══════════════════════════════════════
+// LOGO STYLE CONTROLS
+// ═══════════════════════════════════════
+const LOGO_MODES = ['SOLID','LINE'];
+const logoMC = document.getElementById('logoModeBtns'), logoMBs = [];
+LOGO_MODES.forEach((k,i)=>{
+  const b=document.createElement('button');b.className='btn';
+  b.style.cssText='color:var(--amb);border:1px solid var(--amb);text-shadow:0 0 6px var(--amb)55';
+  b.textContent=k;
+  b.onclick=()=>{P.logoMode=i;logoMBs.forEach((bb,j)=>bb.classList.toggle('active',j===i));};
+  logoMC.appendChild(b);logoMBs.push(b);
+});
+logoMBs[0].classList.add('active');
+
+mkSld(document.getElementById('sldLogo'),'LINE WIDTH','logoLineW','var(--amb)',1,6);
+
+const LOGO_CNAMES=["CYAN","GREEN","MAGENTA","AMBER","WHITE"];
+const LOGO_CCSS=["var(--cyan)","var(--grn)","var(--mag)","var(--amb)","#ffffff"];
+const logoClrC=document.getElementById('logoClrBtns'),logoClrBs=[];
+LOGO_CNAMES.forEach((n,i)=>{
+  const b=document.createElement('button');b.className='btn';
+  b.style.cssText=`color:${LOGO_CCSS[i]};border:1px solid ${LOGO_CCSS[i]};text-shadow:0 0 6px ${LOGO_CCSS[i]}55`;
+  b.textContent=n;b.onclick=()=>{P.logoColor=i;updLogoClr();};
+  logoClrC.appendChild(b);logoClrBs.push(b);
+});
+function updLogoClr(){logoClrBs.forEach((b,i)=>b.classList.toggle('active',P.logoColor===i));}
+updLogoClr();
+
+// ═══════════════════════════════════════
+const aB=document.getElementById('actBar');
+function mkActBtn(txt,clr,fn){const b=document.createElement('button');b.className='btn';b.style.cssText=`color:${clr};border:1px solid ${clr};text-shadow:0 0 6px ${clr}55`;b.textContent=txt;b.onclick=fn;aB.appendChild(b);return b;}
+
+const playBtn=mkActBtn('▶ PLAY','var(--grn)',()=>{if(mediaType!=='video'||!loaded)return;if(playing){srcVid.pause();playing=false;}else{srcVid.play().then(()=>{playing=true;updatePlayBtn();}).catch(()=>{});}updatePlayBtn();});
+playBtn.style.display='none';
+function updatePlayBtn(){playBtn.style.display=(mediaType==='video'&&loaded)?'':'none';playBtn.textContent=playing?'⏸ PAUSE':'▶ PLAY';}
+
+mkActBtn('📸 PNG','var(--cyan)',()=>{if(!loaded)return;const a=document.createElement('a');a.href=outC.toDataURL('image/png');a.download='nexus-'+CW+'x'+CH+'.png';a.click();});
+
+const recBtn=mkActBtn('⏺ REC','var(--red)',toggleRec);
+function toggleRec(){
+  if(!loaded)return;
+  if(!isRec){
+    recChunks=[];const stream=outC.captureStream(30);
+    let mime='video/webm;codecs=vp9';if(!MediaRecorder.isTypeSupported(mime)){mime='video/webm;codecs=vp8';if(!MediaRecorder.isTypeSupported(mime))mime='video/webm';}
+    recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:15000000});
+    recorder.ondataavailable=e=>{if(e.data.size>0)recChunks.push(e.data);};
+    recorder.onstop=()=>{const b=new Blob(recChunks,{type:'video/webm'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='nexus-'+CW+'x'+CH+'.webm';document.body.appendChild(a);a.click();document.body.removeChild(a);isRec=false;recBtn.textContent='⏺ REC';recBtn.classList.remove('active');document.getElementById('recInd').style.display='none';clearInterval(recTmr);};
+    recorder.start(100);isRec=true;recStart=Date.now();
+    recBtn.textContent='⏹ STOP';recBtn.classList.add('active');document.getElementById('recInd').style.display='flex';
+    recTmr=setInterval(()=>{const s=Math.floor((Date.now()-recStart)/1000);document.getElementById('recT').textContent=s;recBtn.textContent='⏹ STOP ('+s+'s)';},1000);
+  }else{if(recorder&&recorder.state!=='inactive')recorder.stop();}
+}
+
+mkActBtn('↻ RESET','var(--amb)',()=>{Object.assign(P,{sens:60,thick:2,glow:60,color:0,orig:0,scan:40,grid:20,gridWidth:1,vig:60,hud:70,noise:15,ledSize:6,ledSpace:3,ledBright:50,ledGlow:50,ledColor:0,tickerSpeed:8,tickerSize:100,crtDotMax:8,crtSpace:2,crtGlow:60,crtColor:0,pipSize:30,pipSens:60,pipThick:2,pipGlow:50,logoMode:0,logoColor:0,logoLineW:2,headerSize:60});refreshSld();updClr();updLedClr();updCrtClr();updLogoClr();logoMBs.forEach((b,j)=>b.classList.toggle('active',j===0));canvasOrder=['header','media','ticker','logo'];renderOrderUI();});
+
+// ═══════════════════════════════════════
+// DIAGNOSTICS
+// ═══════════════════════════════════════
+const dg=document.getElementById('diag');
+[['EDGE','SOBEL 3×3'],['RENDER','LASER / LED'],['CODEC','VP9 15Mbps'],['FORMAT','WEBM / PNG']].forEach(([k,v])=>{const d=document.createElement('div');d.className='diag-r';d.innerHTML=`<span class="glow" style="font-size:7px;color:var(--dim)">${k}</span><span class="glow" style="font-size:7px;color:var(--cyan)">${v}</span>`;dg.appendChild(d);});
+</script>
+</body>
+</html>
