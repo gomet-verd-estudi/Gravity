@@ -128,7 +128,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Share Tech Mono',monospa
     </div>
 
     <!-- LASER controls (visible when laser mode) -->
-    <div id="laserPanel">
+    <div id="laserPanel" style="display:none">
       <div class="pnl"><span class="cbl"></span><span class="cbr"></span>
         <div class="pnl-t"><span class="ind" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></span><span class="glow" style="font-size:9px;font-weight:700;color:var(--cyan)">EDGE DETECTION</span></div>
         <div class="pnl-b" id="sldEdge"></div>
@@ -270,13 +270,14 @@ const FORMATS = {
   '1:1':   [1080, 1080],
   '4:5':   [1080, 1350],
   '4:3':   [1440, 1080],
+  '3:4':   [1080, 1440],
 };
 const FIT_MODES = ['FIT WIDTH', 'FIT HEIGHT'];
-const RENDER_MODES = ['LASER', 'LED', 'CRT'];
+const RENDER_MODES = ['ORIGINAL', 'LASER', 'LED', 'CRT'];
 
 let CW = 1920, CH = 1080;
 let fitMode = 0;
-let renderMode = 0; // 0=laser, 1=led, 2=crt
+let renderMode = 0; // 0=original, 1=laser, 2=led, 3=crt
 
 let mediaType = null, loaded = false, playing = false;
 let isRec = false, recStart = 0, recTmr = null;
@@ -473,6 +474,10 @@ function render() {
   const mc=glowCtx;
 
   if (renderMode===0) {
+    // ── ORIGINAL: draw source as-is ──
+    mc.drawImage(srcC, 0, 0);
+
+  } else if (renderMode===1) {
     // ── LASER ──
     const edges=sobel(sd,MW,MEDIA_H);
     const th=(100-P.sens)/100*0.45;
@@ -499,7 +504,7 @@ function render() {
     }
     mc.putImageData(img,0,0);
 
-  } else if (renderMode===1) {
+  } else if (renderMode===2) {
     // ── LED ──
     const sz=P.ledSize,sp=P.ledSpace,step=sz+sp;
     const lc=P.ledColor;let lr,lg,lb;
@@ -518,7 +523,7 @@ function render() {
       rowIdx++;
     }
 
-  } else if (renderMode===2) {
+  } else if (renderMode===3) {
     // ── CRT ──
     const maxR=P.crtDotMax,sp=P.crtSpace,step=maxR*2+sp;
     const cc=P.crtColor;let cr,cg,cb;
@@ -811,9 +816,9 @@ RENDER_MODES.forEach((k,i)=>{
   b.textContent=k;
   b.onclick=()=>{
     renderMode=i;modeBs.forEach((bb,j)=>bb.classList.toggle('active',j===i));
-    document.getElementById('laserPanel').style.display=i===0?'block':'none';
-    document.getElementById('ledPanel').style.display=i===1?'block':'none';
-    document.getElementById('crtPanel').style.display=i===2?'block':'none';
+    document.getElementById('laserPanel').style.display=i===1?'block':'none';
+    document.getElementById('ledPanel').style.display=i===2?'block':'none';
+    document.getElementById('crtPanel').style.display=i===3?'block':'none';
   };
   modeC.appendChild(b);modeBs.push(b);
 });
@@ -1004,3 +1009,4 @@ const dg=document.getElementById('diag');
 </script>
 </body>
 </html>
+
